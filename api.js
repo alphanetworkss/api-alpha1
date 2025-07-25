@@ -216,6 +216,43 @@ async function getDrmKeys(mpdUrl) {
 }
 
 // New endpoint to handle video info (GET, query params)
+// Get video URL data directly without making an HTTP request
+async function getVideoUrlData(video_id, subject_id, batch_id) {
+    if (!video_id || !subject_id || !batch_id) {
+        return {
+            success: false,
+            error: 'Missing required parameters: video_id, subject_id, batch_id'
+        };
+    }
+
+    try {
+        const videoData = await getStreamInfo(video_id, subject_id, batch_id);
+
+        if (videoData && videoData.success && videoData.data) {
+            const { url, signedUrl, ...videoInfo } = videoData.data;
+            const fullUrl = url + (signedUrl || '');
+            
+            return {
+                success: true,
+                directUrl: fullUrl,
+                videoInfo: {
+                    ...videoInfo,
+                    fullUrl: fullUrl
+                }
+            };
+        } else {
+            return { success: false, error: 'Invalid response format from video URL API' };
+        }
+    } catch (error) {
+        console.error('Error in getVideoUrlData:', error);
+        return {
+            success: false,
+            error: error.message || 'Failed to fetch video URL',
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        };
+    }
+}
+
 app.get('/getkeys-from-video-info', async (req, res) => {
     try {
         const { video_id, subject_id, batch_id } = req.query;
@@ -229,16 +266,14 @@ app.get('/getkeys-from-video-info', async (req, res) => {
         
         console.log(`Fetching video URL for video_id: ${video_id}`);
         
-        // Step 1: Get direct video URL using our new endpoint
-        const videoResponse = await axios.get(`http://localhost:${PORT}/get-video-url`, {
-            params: { video_id, subject_id, batch_id }
-        });
+        // Step 1: Get direct video URL data directly
+        const videoResponse = await getVideoUrlData(video_id, subject_id, batch_id);
         
-        if (!videoResponse.data.success || !videoResponse.data.directUrl) {
-            throw new Error('Failed to fetch video URL: ' + (videoResponse.data.error || 'Unknown error'));
+        if (!videoResponse.success || !videoResponse.directUrl) {
+            throw new Error('Failed to fetch video URL: ' + (videoResponse.error || 'Unknown error'));
         }
         
-        const mpdUrl = videoResponse.data.directUrl;
+        const mpdUrl = videoResponse.directUrl;
         console.log(`Retrieved MPD URL: ${mpdUrl}`);
         
         // Step 2: Get DRM keys
@@ -251,7 +286,7 @@ app.get('/getkeys-from-video-info', async (req, res) => {
             kid: result.kid,
             key: result.key,
             timestamp: new Date().toISOString(),
-            videoInfo: videoResponse.data.videoInfo
+            videoInfo: videoResponse.videoInfo
         });
         
     } catch (error) {

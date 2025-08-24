@@ -70,7 +70,7 @@ async function getStreamInfo(videoId, subjectId, batchId) {
         "Referer": "https://www.powerstudy.site/",
         "Priority": "u=1, i",
         "Authorization": `Bearer ${accessToken.replace(/^"|"$/g, '')}`,
-        "Cookie": "accessToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2ODgzMWExMzljOGUzNmU2MDQxNzcxZDEiLCJuYW1lIjoiQXNoYSBLdW1hcmkiLCJ0ZWxlZ3JhbUlkIjpudWxsLCJQaG90b1VybCI6bnVsbCwiaWF0IjoxNzU0NjcwNDE0LCJleHAiOjE3NTU5NjY0MTR9.A8VpNjb3vP-0E334Kf4UGr8BfigXGQOJwHhEgV1iuf4; refreshToken=d0"
+        "Cookie": "accessToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2ODgzMWExMzljOGUzNmU2MDQxNzcxZDEiLCJuYW1lIjoiQXNoYSBLdW1hcmkiLCJ0ZWxlZ3JhbUlkIjpudWxsLCJQaG90b1VybCI6bnVsbCwiaWF0IjoxNzU2MDIyMDgzLCJleHAiOjE3NTczMTgwODN9.72wwh0vyLaUUZWVRsidMK0CPdAp35w9IUmXD7TweILQ; refreshToken=d0"
     };
 
     const params = {

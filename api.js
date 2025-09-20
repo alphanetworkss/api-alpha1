@@ -70,7 +70,7 @@ async function getStreamInfo(videoId, subjectId, batchId) {
         "Referer": "https://www.powerstudy.site/",
         "Priority": "u=1, i",
         "Authorization": `Bearer ${accessToken.replace(/^"|"$/g, '')}`,
-        "Cookie": "accessToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2ODgzMWExMzljOGUzNmU2MDQxNzcxZDEiLCJuYW1lIjoiQXNoYSBLdW1hcmkiLCJ0ZWxlZ3JhbUlkIjpudWxsLCJQaG90b1VybCI6bnVsbCwiaWF0IjoxNzU2MDIyMDgzLCJleHAiOjE3NTczMTgwODN9.72wwh0vyLaUUZWVRsidMK0CPdAp35w9IUmXD7TweILQ; refreshToken=d0"
+        "Cookie": "accessToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OGNlODllMWRlZjk1ZmIwNmViNGM1YWYiLCJuYW1lIjoiQXNoYSBLdW1hcmkiLCJ0ZWxlZ3JhbUlkIjpudWxsLCJQaG90b1VybCI6Imh0dHBzOi8vZDJicHM5cDFraXk0a2EuY2xvdWRmcm9udC5uZXQvNWIwOTE4OWY3Mjg1ODk0ZDkxMzBjY2QwLzMzNTFhZTg1LTNhYzgtNGRlZC05ZDE0LTk5NzNmZDI3MzA2NC5wbmciLCJpYXQiOjE3NTgzNzgxNjAsImV4cCI6MTc1OTY3NDE2MH0.R2benJo9mSTiXqUmGyokK-Y3gVil1q5eHhfR6AymPno; refreshToken=d0"
     };
 
     const params = {
@@ -80,7 +80,7 @@ async function getStreamInfo(videoId, subjectId, batchId) {
     };
 
     try {
-        const response = await axios.get("https://www.powerstudy.site/api/get-video-url", {
+        const response = await axios.get("https://www.powerstudy.site/api/media/get-video-url", {
             params: params,
             headers: headers
         });

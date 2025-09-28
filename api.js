@@ -429,6 +429,117 @@ app.get('/get-video-url', async (req, res) => {
     }
 });
 
+// Helper: base64url encode a Buffer
+function base64Url(buffer) {
+    return buffer.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/**
+ * Route: GET or POST /get-clearkey-from-media-url
+ * Accepts:
+ *  - query param "url" (GET) OR JSON body { "url": "..." } (POST)
+ *
+ * Example request:
+ *  GET /get-clearkey-from-media-url?url=https://sec-prod-mediacdn.pw.live/0337e5d2-728e-4c94-87cc-e13703cf639b/dash/audio/2.mp4?URLPrefix=...
+ *
+ * Response:
+ * {
+ *   status: "success",
+ *   mpdUrl: "...",
+ *   kid_hex: "...",
+ *   key_raw: "...",           // string returned by your existing getKeys function (kid:key)
+ *   clearkey: { keys: { "<kid_b64url>": "<key_b64url>" } }
+ * }
+ */
+app.all('/get-clearkey-from-media-url', async (req, res) => {
+    try {
+        const inputUrl = (req.method === 'GET') ? req.query.url : (req.body && req.body.url);
+        if (!inputUrl) {
+            return res.status(400).json({ status: 'error', error: 'Missing "url" parameter (query or JSON body).' });
+        }
+
+        // Parse the URL
+        let parsed;
+        try {
+            parsed = new URL(inputUrl);
+        } catch (e) {
+            return res.status(400).json({ status: 'error', error: 'Invalid URL provided.' });
+        }
+
+        // Try to find UUID segment in path (common in these URLs)
+        // UUID regex: 8-4-4-4-12 (hex + dashes)
+        const uuidMatch = parsed.pathname.match(/\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\//);
+
+        if (!uuidMatch) {
+            return res.status(400).json({
+                status: 'error',
+                error: 'Could not find UUID segment in path to build master.mpd. Example path must contain the content-id UUID.'
+            });
+        }
+
+        const uuid = uuidMatch[1]; // e.g. 0337e5d2-728e-4c94-87cc-e13703cf639b
+
+        // Build master.mpd URL: origin + /<uuid>/master.mpd + original query string (if any)
+        const mpdUrl = `${parsed.origin}/${uuid}/master.mpd${parsed.search || ''}`;
+
+        console.log(`Constructed MPD URL from input: ${mpdUrl}`);
+
+        // Use your existing getDrmKeys flow (which calls getPsshKid and getKeys)
+        const drmResult = await getDrmKeys(mpdUrl); // returns { mpdUrl, kid, key }
+
+        // drmResult.kid is returned by getPsshKid() as hex (you already strip dashes in getPsshKid)
+        // drmResult.key is returned by getKeys() as "kid:decryptionKey" (string). If getKeys returns differently adapt accordingly.
+        const returnedKey = drmResult.key || '';
+        // If getKeys returned in form "kid:decryptionKey", split it.
+        let kidHex = drmResult.kid || '';
+        let decryptionKeyRaw = returnedKey.includes(':') ? returnedKey.split(':')[1] : returnedKey;
+
+        // Build ClearKey JSON: convert kid hex -> base64url, convert decryptionKey (raw string) -> base64url
+        // First convert kid hex (hex string) to Buffer
+        let kidB64Url = '';
+        try {
+            const kidBuf = Buffer.from(kidHex, 'hex'); // assumes kidHex is hex (no dashes)
+            kidB64Url = base64Url(kidBuf);
+        } catch (e) {
+            console.warn('Failed to convert kid hex to base64url:', e.message);
+        }
+
+        // Convert decryptionKeyRaw (binary string) into Buffer. Many of your helpers produce a raw byte-string.
+        // We'll try a few options safely:
+        let keyB64Url = '';
+        try {
+            // If decryptionKeyRaw looks like hex, convert hex
+            if (/^[0-9a-fA-F]+$/.test(decryptionKeyRaw) && (decryptionKeyRaw.length % 2 === 0)) {
+                keyB64Url = base64Url(Buffer.from(decryptionKeyRaw, 'hex'));
+            } else {
+                // otherwise assume it's a binary/string created by getKey() — use 'binary' encoding
+                keyB64Url = base64Url(Buffer.from(decryptionKeyRaw, 'binary'));
+            }
+        } catch (e) {
+            console.warn('Failed to convert decryption key to base64url:', e.message);
+        }
+
+        // ClearKey map (as expected by some players): keys: { "<kid_b64url>": "<key_b64url>" }
+        const clearkeyObj = { keys: {} };
+        if (kidB64Url && keyB64Url) clearkeyObj.keys[kidB64Url] = keyB64Url;
+
+        // Return everything helpful
+        return res.json({
+            status: 'success',
+            mpdUrl: drmResult.mpdUrl || mpdUrl,
+            kid_hex: kidHex,
+            key_raw: returnedKey,
+            clearkey: clearkeyObj,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (err) {
+        console.error('Error in /get-clearkey-from-media-url:', err && err.message ? err.message : err);
+        return res.status(500).json({ status: 'error', error: err.message || 'Internal error' });
+    }
+});
+
+
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);

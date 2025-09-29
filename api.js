@@ -70,7 +70,7 @@ async function getStreamInfo(videoId, subjectId, batchId) {
         "Referer": "https://www.powerstudy.site/",
         "Priority": "u=1, i",
         "Authorization": `Bearer ${accessToken.replace(/^"|"$/g, '')}`,
-        "Cookie": "accessToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OGNlODllMWRlZjk1ZmIwNmViNGM1YWYiLCJuYW1lIjoiQXNoYSBLdW1hcmkiLCJ0ZWxlZ3JhbUlkIjpudWxsLCJQaG90b1VybCI6Imh0dHBzOi8vZDJicHM5cDFraXk0a2EuY2xvdWRmcm9udC5uZXQvNWIwOTE4OWY3Mjg1ODk0ZDkxMzBjY2QwLzMzNTFhZTg1LTNhYzgtNGRlZC05ZDE0LTk5NzNmZDI3MzA2NC5wbmciLCJpYXQiOjE3NTgzNzgxNjAsImV4cCI6MTc1OTY3NDE2MH0.R2benJo9mSTiXqUmGyokK-Y3gVil1q5eHhfR6AymPno; refreshToken=d0"
+        "Cookie": "accessToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OGRhMDY4Y2U5NmNjNTE3YzY5ZDEzNjIiLCJuYW1lIjoiT21rYW50IG1hbmkiLCJ0ZWxlZ3JhbUlkIjpudWxsLCJQaG90b1VybCI6Imh0dHBzOi8vY2RuLWljb25zLXBuZy5mbGF0aWNvbi5jb20vNTEyLzM2MDcvMzYwNzQ0NC5wbmciLCJpYXQiOjE3NTkxMTg5ODksImV4cCI6MTc2MDQxNDk4OX0.I2OSv8TCMVHMJmaDQEfdar9LATTKFmjpjQ2W0rUMLK8; refreshToken=d0"
     };
 
     const params = {
@@ -120,20 +120,64 @@ async function getPsshKid(mpdUrl) {
     let pssh = '', kid = '';
     for (let i = 0; i < 3; i++) {
         try {
+            console.log(`Attempt ${i+1}: Fetching MPD from ${mpdUrl}`);
             const response = await axios.get(mpdUrl);
             const mpdRes = response.data;
             
-            // Extract PSSH
-            const psshMatch = mpdRes.match(/<cenc:pssh>(.*?)<\/cenc:pssh>/);
-            if (psshMatch) pssh = psshMatch[1];
+            console.log(`Response status: ${response.status}, Content type: ${response.headers['content-type']}`);
             
-            // Extract KID
-            const kidMatch = mpdRes.match(/default_KID="([\S]+)"/);
-            if (kidMatch) kid = kidMatch[1].replace(/-/g, '');
+            if (typeof mpdRes === 'string') {
+                console.log(`MPD content length: ${mpdRes.length} characters`);
+                
+                // Extract PSSH with multiple patterns
+                const psshPatterns = [
+                    /<cenc:pssh>(.*?)<\/cenc:pssh>/,
+                    /<ContentProtection schemeIdUri="urn:mpeg:dash:mp4protection:2011".*?default_KID="([^"]+)"/,
+                    /<ContentProtection schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed"(?:.*?)<cenc:pssh>(.*?)<\/cenc:pssh>/,
+                    /cenc:pssh=(.*?)[\s>]/
+                ];
+                
+                for (const pattern of psshPatterns) {
+                    const match = mpdRes.match(pattern);
+                    if (match && match[1]) {
+                        pssh = match[1].trim();
+                        break;
+                    }
+                }
+                
+                // Extract KID with multiple patterns
+                const kidPatterns = [
+                    /default_KID="([^"]+)"/,
+                    /content_KID="([^"]+)"/,
+                    /KID="([^"]+)"/,
+                    /key_id="([^"]+)"/
+                ];
+                
+                for (const pattern of kidPatterns) {
+                    const match = mpdRes.match(pattern);
+                    if (match && match[1]) {
+                        kid = match[1].replace(/-/g, '');
+                        break;
+                    }
+                }
+                
+                // Log debug info
+                console.log(`Found PSSH: ${pssh || 'None'}`);
+                console.log(`Found KID: ${kid || 'None'}`);
+                console.log(`PSSH pattern matches: ${mpdRes.match(/<cenc:pssh>/gi)?.length || 0}`);
+                console.log(`KID pattern matches: ${mpdRes.match(/default_KID=/gi)?.length || 0}`);
+            } else {
+                console.log('Response data is not a string:', typeof mpdRes);
+            }
             
             if (pssh && kid) break;
+            
         } catch (error) {
             console.error(`Attempt ${i+1}: Error fetching MPD - ${error.message}`);
+            if (error.response) {
+                console.error(`HTTP Status: ${error.response.status}`);
+                console.error(`Response data: ${JSON.stringify(error.response.data)}`);
+            }
         }
     }
     return { pssh, kid };
@@ -374,7 +418,31 @@ app.get('/', (req, res) => {
                 </div>
                 
                 <div class="endpoint">
-                    <h2>Endpoint 2: Get keys from MPD URL</h2>
+                    <h2>Endpoint 2: Convert DASH to MPD and get keys</h2>
+                    <p>GET/POST <code>/convert-dash-to-mpd</code></p>
+                    
+                    <h3>Accepted URL patterns:</h3>
+                    <ul>
+                        <li><code>https://.../<uuid>/dash/240/2.mp4?...</code></li>
+                        <li><code>https://.../<uuid>/dash/1.mp4?...</code></li>
+                        <li><code>https://.../<uuid>/dash/audio/init.mp4?...</code></li>
+                        <li><code>https://.../<uuid>/master.mpd?...</code> (used as-is)</li>
+                    </ul>
+                    
+                    <h3>POST Method (Recommended):</h3>
+                    <pre>{
+    "url": "https://sec-prod-mediacdn.pw.live/7609c665-25b3-40b9-8ef2-b7ae5e0719c0/dash/240/2.mp4?URLPrefix=...&Expires=...&KeyName=...&Signature=..."
+}</pre>
+                    
+                    <h3>GET Method:</h3>
+                    <p>⚠️ For GET requests, the URL must be properly URL-encoded:</p>
+                    <pre>https://your-api.com/convert-dash-to-mpd?url=https%3A//sec-prod-mediacdn.pw.live/7609c665-25b3-40b9-8ef2-b7ae5e0719c0/dash/240/2.mp4%3FURLPrefix%3D...%26Expires%3D...%26KeyName%3D...%26Signature%3D...</pre>
+                    
+                    <p><strong>Note:</strong> Use POST method to avoid URL encoding issues with complex URLs containing multiple query parameters.</p>
+                </div>
+                
+                <div class="endpoint">
+                    <h2>Endpoint 3: Get keys from MPD URL</h2>
                     <p>POST <code>/getkeys</code></p>
                     <p>Parameters:</p>
                     <pre>{
@@ -539,12 +607,197 @@ app.all('/get-clearkey-from-media-url', async (req, res) => {
     }
 });
 
+/**
+ * Endpoint to convert DASH video URLs to master.mpd and get keys
+ * Accepts URLs like: sec-prod-mediacdn.pw.live/0ad2248b-54ae-4a8a-8b54-c97936effbe8/dash/1.mp4?URLPrefix=...
+ * Returns the same format as /getkeys-from-video-info endpoint
+ */
+app.all('/convert-dash-to-mpd', async (req, res) => {
+    try {
+        let inputUrl;
+        
+        if (req.method === 'GET') {
+            // For GET requests, handle potential URL encoding issues
+            inputUrl = req.query.url;
+            
+            // If multiple query parameters exist, reconstruct the full URL
+            if (!inputUrl && Object.keys(req.query).length > 0) {
+                // Check if the URL was split across multiple parameters
+                const urlParts = [];
+                const orderedParams = {};
+                
+                // Sort query parameters to maintain order
+                Object.keys(req.query).forEach(key => {
+                    const match = key.match(/url(\d*)/);
+                    if (match) {
+                        const index = match[1] ? parseInt(match[1]) : 0;
+                        orderedParams[index] = req.query[key];
+                    }
+                });
+                
+                // If no url parameter found, try to extract from other parameters
+                if (Object.keys(orderedParams).length === 0) {
+                    // Try to find URL pattern in the query string
+                    const queryString = req.url.split('?')[1];
+                    if (queryString) {
+                        inputUrl = queryString;
+                    }
+                }
+            }
+            
+            // If inputUrl is null/undefined, try to parse raw query string
+            if (!inputUrl) {
+                const rawQuery = req.url.split('?')[1];
+                if (rawQuery) {
+                    // Try to decode the URL parameter properly
+                    try {
+                        const decoded = decodeURIComponent(rawQuery);
+                        inputUrl = decoded;
+                    } catch (e) {
+                        console.log('URL decoding failed, using raw query');
+                        inputUrl = rawQuery;
+                    }
+                }
+            }
+        } else {
+            // For POST requests, use body directly
+            inputUrl = req.body && req.body.url;
+        }
+        
+        if (!inputUrl) {
+            return res.status(400).json({ 
+                status: 'error',
+                error: 'Missing "url" parameter.',
+                usage: {
+                    GET: 'GET /convert-dash-to-mpd?url=https://sec-prod-mediacdn.pw.live/... (URL must be URL encoded)',
+                    POST: 'POST /convert-dash-to-mpd with {"url": "https://sec-prod-mediacdn.pw.live/..."}'
+                },
+                received_query: req.query,
+                received_body: req.body
+            });
+        }
+
+        // Parse the URL
+        let parsed;
+        try {
+            parsed = new URL(inputUrl);
+        } catch (e) {
+            return res.status(400).json({ 
+                status: 'error',
+                error: 'Invalid URL provided.',
+                provided_url: inputUrl
+            });
+        }
+
+        // Accept multiple patterns:
+        // - /<uuid>/dash/<bitrate>/<n>.mp4 (e.g., /dash/240/2.mp4)
+        // - /<uuid>/dash/audio/init.mp4
+        // - /<uuid>/dash/<n>.mp4
+        // - /<uuid>/master.mpd (already formed)
+        // Extract UUID anywhere in the path first
+        const uuidAnyMatch = parsed.pathname.match(/\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(?:\/|$)/);
+
+        if (!uuidAnyMatch) {
+            return res.status(400).json({
+                status: 'error',
+                error: 'Could not find UUID segment in the path.',
+                provided_url: inputUrl,
+                parsed_pathname: parsed.pathname
+            });
+        }
+
+        const uuid = uuidAnyMatch[1];
+
+        // If it's already master.mpd, use as-is
+        let mpdUrl;
+        if (/\/master\.mpd$/.test(parsed.pathname)) {
+            mpdUrl = parsed.toString();
+        } else {
+            // Otherwise, construct master.mpd preserving the original query
+            mpdUrl = `${parsed.origin}/${uuid}/master.mpd${parsed.search || ''}`;
+        }
+
+        console.log(`=== ${req.method} Request Debug ===`);
+        console.log(`Original URL received: ${inputUrl}`);
+        console.log(`URL length: ${inputUrl.length}`);
+        console.log(`URL contains URLPrefix: ${inputUrl.includes('URLPrefix')}`);
+        console.log(`URL contains Expires: ${inputUrl.includes('Expires')}`);
+
+        // Use existing DRM keys extraction logic with improved error handling
+        const { pssh, kid } = await getPsshKid(mpdUrl);
+        console.log(`PSSH: ${pssh || 'Not found'}`);
+        console.log(`KID: ${kid || 'Not found'}`);
+        
+        if (!kid) {
+            // Try to fetch the MPD content directly to debug
+            try {
+                const testResponse = await axios.get(mpdUrl);
+                console.log(`MPD Response Status: ${testResponse.status}`);
+                console.log(`MPD Content Length: ${testResponse.data ? testResponse.data.length : 'No data'}`);
+                
+                // Check if it's actually MPD content
+                if (testResponse.data && typeof testResponse.data === 'string') {
+                    const isMpd = testResponse.data.includes('<MPD') || testResponse.data.includes('<?xml');
+                    console.log(`Is MPD format: ${isMpd}`);
+                    if (isMpd) {
+                        // Extract all KID patterns found
+                        const allKidMatches = testResponse.data.match(/default_KID="([^"]+)"/g) || [];
+                        const allPsshMatches = testResponse.data.match(/<cenc:pssh>([^<]+)<\/cenc:pssh>/g) || [];
+                        console.log(`All KID patterns found: ${allKidMatches.length}`);
+                        console.log(`All KID matches:`, allKidMatches);
+                        console.log(`All PSSH patterns found: ${allPsshMatches.length}`);
+                        
+                        if (allKidMatches.length === 0) {
+                            throw new Error('No DRM KID found in MPD content - this may not be DRM protected content');
+                        }
+                    } else {
+                        throw new Error('Response is not in MPD format - check URL construction');
+                    }
+                }
+            } catch (debugError) {
+                console.error(`Debug MPD fetch error: ${debugError.message}`);
+            }
+            
+            throw new Error(`KID extraction failed - constructed MPD URL may be incorrect or content is not DRM protected. Debug info: ${pssh ? 'PSSH found but no KID' : 'No DRM elements found'}`);
+        }
+
+        console.log(`Extracted KID: ${kid}`);
+        
+        // Get decryption key
+        const key = await getKeys(kid);
+
+        res.json({
+            status: 'success',
+            originalUrl: inputUrl,
+            mpdUrl: mpdUrl,
+            kid: kid,
+            key: key,
+            timestamp: new Date().toISOString(),
+            conversion: {
+                uuid: uuid,
+                origin: parsed.origin,
+                queryString: parsed.search
+            }
+        });
+        
+    } catch (error) {
+        console.error('DASH conversion endpoint error:', error.message);
+        res.status(500).json({ 
+            status: 'error',
+            message: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
+});
+
 
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
     console.log(`Endpoints:`);
-    console.log(`- POST http://localhost:${PORT}/getkeys-from-video-info`);
+    console.log(`- GET/POST http://localhost:${PORT}/convert-dash-to-mpd`);
+    console.log(`- GET/POST http://localhost:${PORT}/getclearkey-from-media-url`);
+    console.log(`- GET http://localhost:${PORT}/getkeys-from-video-info`);
     console.log(`- POST http://localhost:${PORT}/getkeys`);
     console.log(`- GET http://localhost:${PORT}/get-video-url`);
 });

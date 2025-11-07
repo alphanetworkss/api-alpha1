@@ -56,21 +56,21 @@ async function getStreamInfo(videoId, subjectId, batchId) {
     const accessToken = await getAccessToken();
     
     const headers = {
-        "Host": "powerstudy.site",
+        "Host": "studymeta.in",
         "Sec-Ch-Ua-Platform": '"Windows"',
         "Accept-Language": "en-US,en;q=0.9",
         "Sec-Ch-Ua": '"Not)A;Brand";v="8", "Chromium";v="138"',
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
         "Sec-Ch-Ua-Mobile": "?0",
         "Accept": "*/*",
-        "Origin": "https://www.powerstudy.site/",
+        "Origin": "https://www.studymeta.in/",
         "Sec-Fetch-Site": "cross-site",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Dest": "empty",
-        "Referer": "https://www.powerstudy.site/",
+        "Referer": "https://www.studymeta.in/",
         "Priority": "u=1, i",
         "Authorization": `Bearer ${accessToken.replace(/^"|"$/g, '')}`,
-        "Cookie": "accessToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OGRhMDY4Y2U5NmNjNTE3YzY5ZDEzNjIiLCJuYW1lIjoiT21rYW50IG1hbmkiLCJ0ZWxlZ3JhbUlkIjpudWxsLCJQaG90b1VybCI6Imh0dHBzOi8vY2RuLWljb25zLXBuZy5mbGF0aWNvbi5jb20vNTEyLzM2MDcvMzYwNzQ0NC5wbmciLCJpYXQiOjE3NTkxMTg5ODksImV4cCI6MTc2MDQxNDk4OX0.I2OSv8TCMVHMJmaDQEfdar9LATTKFmjpjQ2W0rUMLK8; refreshToken=d0"
+        "Cookie": "accessToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OTBkNjhlZDA5ODc0YTIxYTIzNDY5M2IiLCJuYW1lIjoiQXNoYSBLdW1hcmkiLCJ0ZWxlZ3JhbUlkIjpudWxsLCJQaG90b1VybCI6Imh0dHBzOi8vZDJicHM5cDFraXk0a2EuY2xvdWRmcm9udC5uZXQvNWIwOTE4OWY3Mjg1ODk0ZDkxMzBjY2QwLzMzNTFhZTg1LTNhYzgtNGRlZC05ZDE0LTk5NzNmZDI3MzA2NC5wbmciLCJpYXQiOjE3NjI0ODY1MTAsImV4cCI6MTc2Mzc4MjUxMH0.KeQI_a9MXNDvEMl29ADh3giHl_IxrLKQgpirTQ8QGNU; refreshToken=d0"
     };
 
     const params = {
